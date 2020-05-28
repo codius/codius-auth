@@ -10,16 +10,16 @@ COPY go.sum go.sum
 RUN go mod download
 
 # Copy the go source
-COPY webhook.go webhook.go
+COPY main.go main.go
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o webhook webhook.go
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GO111MODULE=on go build -a -o codius-auth main.go
 
-# Use distroless as minimal base image to package the webhook binary
+# Use distroless as minimal base image to package the codius-auth binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /
-COPY --from=builder /workspace/webhook .
+COPY --from=builder /workspace/codius-auth .
 USER nonroot:nonroot
 
-ENTRYPOINT ["/webhook"]
+ENTRYPOINT ["/codius-auth"]

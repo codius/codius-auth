@@ -9,12 +9,46 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	authv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func authenticate(rw http.ResponseWriter, req *http.Request) {
+func deductBalance(id *string) error {
+	url := fmt.Sprintf("%s/balances/%s:spend", os.Getenv("RECEIPT_VERIFIER_URL"), *id)
+	log.Println(url)
+	resp, err := http.Post(url, "text/plain", bytes.NewBuffer([]byte(os.Getenv("AUTH_PRICE"))))
+	if err != nil {
+		fmt.Println("Balance spend error:", err)
+		return err
+	}
+	b, _ := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode != 200 {
+		fmt.Println("Balance spend error:", string(b))
+		return errors.New(string(b))
+	}
+	fmt.Println("Balance:", string(b))
+	return nil
+}
+
+func forwardAuth(rw http.ResponseWriter, req *http.Request) {
+	serviceHost := req.Header.Get("x-forwarded-host")
+	if serviceHost == "" {
+		rw.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	serviceId := strings.SplitN(serviceHost, ".", 2)[0]
+	err := deductBalance(&serviceId)
+	if err != nil {
+		url402 := fmt.Sprintf("%s/%s/402", os.Getenv("CODIUS_HOST_URL"), serviceId)
+		http.Redirect(rw, req, url402, http.StatusSeeOther)
+	} else {
+		rw.WriteHeader(http.StatusOK)
+	}
+}
+
+func tokenAuth(rw http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodPost {
 		http.NotFound(rw, req)
 		return
@@ -27,24 +61,11 @@ func authenticate(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	req = &http.Request{
-		Header: map[string][]string{},
-	}
-	url := fmt.Sprintf("%s/balances/%s:spend", os.Getenv("RECEIPT_VERIFIER_URL"), tr.Spec.Token)
-	log.Println(url)
-	resp, err := http.Post(url, "text/plain", bytes.NewBuffer([]byte(os.Getenv("AUTH_PRICE"))))
+    err = deductBalance(&tr.Spec.Token)
 	if err != nil {
-		fmt.Println("Balance spend error:", err)
 		handleErr(rw, err)
 		return
 	}
-	b, _ := ioutil.ReadAll(resp.Body)
-	if resp.StatusCode != 200 {
-		fmt.Println("Balance spend error:", string(b))
-		handleErr(rw, errors.New(string(b)))
-		return
-	}
-	fmt.Println("Balance:", string(b))
 
 	user := os.Getenv("RBAC_USER")
 	// groups := []string{
@@ -95,7 +116,8 @@ func main() {
 		port = "8080"
 	}
 	addr := fmt.Sprintf(":%s", port) 
-	http.HandleFunc("/authenticate", authenticate)
+	http.HandleFunc("/forward", forwardAuth)
+	http.HandleFunc("/token", tokenAuth)
 	fmt.Println("Starting server on", addr)
 	http.ListenAndServe(addr, nil)
 }
