@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
       - name: codius-auth
-        image: wilsonianbcoil/codius-auth
+        image: codius/codius-auth
         env:
         - name: AUTH_PRICE
           value: "1"

@@ -1,5 +1,7 @@
 # Codius Auth
 
+![](https://github.com/codius/codius-auth/workflows/Docker%20CI/badge.svg)
+
 Auth server that authenticates based on Interledger payment.
 
 ### Environment Variables
