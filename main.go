@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 
 	authv1 "k8s.io/api/authentication/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,22 +29,6 @@ func deductBalance(id *string) error {
 	}
 	fmt.Println("Balance:", string(b))
 	return nil
-}
-
-func forwardAuth(rw http.ResponseWriter, req *http.Request) {
-	serviceHost := req.Header.Get("x-forwarded-host")
-	if serviceHost == "" {
-		rw.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	serviceId := strings.SplitN(serviceHost, ".", 2)[0]
-	err := deductBalance(&serviceId)
-	if err != nil {
-		url402 := fmt.Sprintf("%s/%s/402", os.Getenv("CODIUS_HOST_URL"), serviceId)
-		http.Redirect(rw, req, url402, http.StatusSeeOther)
-	} else {
-		rw.WriteHeader(http.StatusOK)
-	}
 }
 
 func tokenAuth(rw http.ResponseWriter, req *http.Request) {
@@ -116,7 +99,6 @@ func main() {
 		port = "8080"
 	}
 	addr := fmt.Sprintf(":%s", port) 
-	http.HandleFunc("/forward", forwardAuth)
 	http.HandleFunc("/token", tokenAuth)
 	fmt.Println("Starting server on", addr)
 	http.ListenAndServe(addr, nil)
